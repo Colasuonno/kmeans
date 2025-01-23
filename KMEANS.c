@@ -331,6 +331,7 @@ int main(int argc, char* argv[])
 		//1. Calculate the distance from each point to the centroid
 		//Assign each point to the nearest centroid.
 		changes = 0;
+
 		for(i=0; i<lines; i++)
 		{
 			class=1;

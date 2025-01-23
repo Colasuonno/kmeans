@@ -1,0 +1,13 @@
+1) 
+    Si inizia, scorrendo le linee del file (già caricate ovviamente)
+        - Per ogni riga
+        - Calcola la distanza minima da tutti i centroid
+        - Se c'è stato un cambio centroid (classMap[i] != class)
+            - Aggiungi un cambiamento 
+2)
+    Settiamo pointsPerClass a 0 per tutti i cluster
+    Settiamo la matrice della media dei punti per ogni classe a 0
+    - Per ogni linea
+        - Aggiorniamo pointsPerClass con i valori giusti
+        - Stesso discorso per i auxCentroids, 
+    Per ogni cluster, calcola la media

@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# Funzione per mostrare l'uso dello script
+function usage() {
+    echo "Usage: $0 [Input Filename] [Number of Clusters] [Number of Iterations] [Number of Changes] [Threshold]"
+    exit 1
+}
+
+# Controllo dei parametri
+if [ "$#" -ne 5 ]; then
+    usage
+fi
+
+# Parametri
+INPUT_FILENAME=$1
+NUM_CLUSTERS=$2
+NUM_ITERATIONS=$3
+NUM_CHANGES=$4
+THRESHOLD=$5
+
+# File di output
+SEQ_OUTPUT="output_sequential.txt"
+CUDA_OUTPUT="output_cuda.txt"
+DIFF_OUTPUT="diff_output.txt"
+
+# Variabile di stato
+STATUS=0
+
+# Compilazione dei programmi
+echo "Compilazione delle implementazioni..."
+make clean && make all || STATUS=$?
+
+if [ "$STATUS" -ne 0 ]; then
+    echo "Errore durante la compilazione."
+    exit 1
+fi
+
+# Esecuzione della versione sequenziale
+echo "Esecuzione della versione sequenziale..."
+START_TIME=$(date +%s.%N)
+./KMEANS_seq $INPUT_FILENAME $NUM_CLUSTERS $NUM_ITERATIONS $NUM_CHANGES $THRESHOLD $SEQ_OUTPUT || STATUS=$?
+END_TIME=$(date +%s.%N)
+SEQ_TIME=$(echo "$END_TIME - $START_TIME" | bc)
+
+# Esecuzione della versione CUDA
+echo "Esecuzione della versione CUDA..."
+START_TIME=$(date +%s.%N)
+./KMEANS_cuda $INPUT_FILENAME $NUM_CLUSTERS $NUM_ITERATIONS $NUM_CHANGES $THRESHOLD $CUDA_OUTPUT || STATUS=$?
+END_TIME=$(date +%s.%N)
+CUDA_TIME=$(echo "$END_TIME - $START_TIME" | bc)
+
+# Controllo errori di esecuzione
+if [ "$STATUS" -ne 0 ]; then
+    echo "Errore durante l'esecuzione."
+    exit 1
+fi
+
+# Confronto degli output
+echo "Confronto degli output..."
+diff $SEQ_OUTPUT $CUDA_OUTPUT > $DIFF_OUTPUT
+
+if [ -s $DIFF_OUTPUT ]; then
+    echo "Differenze trovate tra le implementazioni. Dettagli in $DIFF_OUTPUT"
+else
+    echo "Nessuna differenza trovata tra le implementazioni."
+    rm $DIFF_OUTPUT
+fi
+
+# Mostra i tempi di esecuzione
+echo "Tempo di esecuzione della versione sequenziale: $SEQ_TIME secondi"
+echo "Tempo di esecuzione della versione CUDA: $CUDA_TIME secondi"
+
+echo "Script completato."
+exit 0

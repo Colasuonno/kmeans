@@ -1,0 +1,10 @@
+.vscode/
+*.out
+*.o
+*.out
+*bin
+
+KMEANS_mpi
+KMEANS_cuda
+KMEANS_seq
+KMEANS_omp
