@@ -325,7 +325,10 @@ int main(int argc, char* argv[])
  *
  */
 
+	double pd_start_tot = 0;
+	double rest_tot = 0;
 	do{
+		double pd_st = clock();
 		it++;
 	
 		//1. Calculate the distance from each point to the centroid
@@ -352,6 +355,9 @@ int main(int argc, char* argv[])
 			}
 			classMap[i]=class;
 		}
+
+		double pd_end = clock();
+		pd_start_tot += (pd_end - pd_st);
 
 		// 2. Recalculates the centroids: calculates the mean within each cluster
 		zeroIntArray(pointsPerClass,K);
@@ -381,9 +387,9 @@ int main(int argc, char* argv[])
 			}
 		}
 		memcpy(centroids, auxCentroids, (K*samples*sizeof(float)));
-		
-		sprintf(line,"\n[%d] Cluster changes: %d\tMax. centroid distance: %f", it, changes, maxDist);
-		outputMsg = strcat(outputMsg,line);
+	
+		double rest_end = clock();
+		rest_tot += (rest_end-pd_end);
 
 	} while((changes>minChanges) && (it<maxIterations) && (maxDist>maxThreshold));
 
@@ -398,6 +404,8 @@ int main(int argc, char* argv[])
 	//END CLOCK*****************************************
 	end = clock();
 	printf("\nComputation: %f seconds", (double)(end - start) / CLOCKS_PER_SEC);
+	printf("\nFirst part: %f seconds", (pd_start_tot / CLOCKS_PER_SEC));
+	printf("\nSecond part: %f seconds", (rest_tot / CLOCKS_PER_SEC));
 	fflush(stdout);
 	//**************************************************
 	//START CLOCK***************************************

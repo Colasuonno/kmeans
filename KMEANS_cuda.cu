@@ -487,8 +487,7 @@ int main(int argc, char* argv[])
 		CHECK_CUDA_CALL(cudaDeviceSynchronize());
 		memcpy(centroids, auxCentroids, (K*samples*sizeof(float)));
 		
-		sprintf(line,"\n[%d] Cluster changes: %d\tMax. centroid distance: %f", it, changes, maxDist);
-		outputMsg = strcat(outputMsg,line);
+	
 
 
 	} while((changes>minChanges) && (it<maxIterations) && (maxDist>maxThreshold));

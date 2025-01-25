@@ -268,6 +268,7 @@ int main(int argc, char* argv[])
 	float *centroids = (float*)calloc(K*samples,sizeof(float));
 	int *classMap = (int*)calloc(lines,sizeof(int));
 
+
     if (centroidPos == NULL || centroids == NULL || classMap == NULL)
 	{
 		fprintf(stderr,"Memory allocation error.\n");
@@ -332,6 +333,8 @@ int main(int argc, char* argv[])
 		//1. Calculate the distance from each point to the centroid
 		//Assign each point to the nearest centroid.
 		changes = 0;
+
+		#pragma omp parallel for private(j, dist, minDist, class) reduction(+:changes)
 		for(i=0; i<lines; i++)
 		{
 			class=1;
@@ -382,8 +385,6 @@ int main(int argc, char* argv[])
 		}
 		memcpy(centroids, auxCentroids, (K*samples*sizeof(float)));
 		
-		sprintf(line,"\n[%d] Cluster changes: %d\tMax. centroid distance: %f", it, changes, maxDist);
-		outputMsg = strcat(outputMsg,line);
 
 	} while((changes>minChanges) && (it<maxIterations) && (maxDist>maxThreshold));
 

@@ -21,6 +21,7 @@ THRESHOLD=$5
 # File di output
 SEQ_OUTPUT="output_sequential.txt"
 CUDA_OUTPUT="output_cuda.txt"
+OMP_OUTPUT="output_omp.txt"
 DIFF_OUTPUT="diff_output.txt"
 
 # Variabile di stato
@@ -49,6 +50,13 @@ START_TIME=$(date +%s.%N)
 END_TIME=$(date +%s.%N)
 CUDA_TIME=$(echo "$END_TIME - $START_TIME" | bc)
 
+# Esecuzione della versione OMP
+echo "Esecuzione della versione OMP..."
+START_TIME=$(date +%s.%N)
+./KMEANS_cuda $INPUT_FILENAME $NUM_CLUSTERS $NUM_ITERATIONS $NUM_CHANGES $THRESHOLD $OMP_OUTPUT || STATUS=$?
+END_TIME=$(date +%s.%N)
+OMP_TIME=$(echo "$END_TIME - $START_TIME" | bc)
+
 # Controllo errori di esecuzione
 if [ "$STATUS" -ne 0 ]; then
     echo "Errore durante l'esecuzione."
@@ -57,18 +65,26 @@ fi
 
 # Confronto degli output
 echo "Confronto degli output..."
-diff $SEQ_OUTPUT $CUDA_OUTPUT > $DIFF_OUTPUT
 
-if [ -s $DIFF_OUTPUT ]; then
-    echo "Differenze trovate tra le implementazioni. Dettagli in $DIFF_OUTPUT"
+# Confronta il primo con il secondo
+diff $SEQ_OUTPUT $CUDA_OUTPUT > diff1.txt
+
+# Confronta il secondo con il terzo
+diff $CUDA_OUTPUT $OMP_OUTPUT > diff2.txt
+
+# Controlla se ci sono differenze
+if [ -s diff1.txt ] || [ -s diff2.txt ]; then
+    echo "Differenze trovate tra le implementazioni."
+    echo "Dettagli in diff1.txt e diff2.txt"
 else
     echo "Nessuna differenza trovata tra le implementazioni."
-    rm $DIFF_OUTPUT
+    rm diff1.txt diff2.txt
 fi
 
 # Mostra i tempi di esecuzione
 echo "Tempo di esecuzione della versione sequenziale: $SEQ_TIME secondi"
 echo "Tempo di esecuzione della versione CUDA: $CUDA_TIME secondi"
+echo "Tempo di esecuzione della versione OMP: $OMP_TIME secondi"
 
 echo "Script completato."
 exit 0
