@@ -1,15 +1,30 @@
-CC          = /opt/cuda/bin/nvcc
-LIBS        = -lm
-CFLAGS      = -arch=compute_75 --compiler-bindir=/usr/bin/gcc-13 -DBLUR_SIZE=1 -DBLOCK_SIZE=16
+BINS:= mpi greetings omp hybrid
 
-RM=rm -f
+all: $(BINS)
 
-EXES=cuda_test test test2
+mpi: mpi.c
+	mpicc -lm -fopenmp -o mpi mpi.c
 
-all: $(EXES)
+greetings: mpi-greetings.c
+	mpicc -o greetings mpi-greetings.c
 
-%: %.cu 
-	$(CC) $(CFLAGS) -o $@ $@.cu $(LIBS)
+omp: omp-hello.c
+	gcc -fopenmp -o omp omp-hello.c
+
+seq: seq.c
+	gcc -lm seq.c -o sec
+
+hybrid: hybrid.c
+	mpicc -openmp -lgomp -lm -o hybrid hybrid.c
+
+test: $(BINS)
+	@echo "Test MPI..."
+	@mpirun -np 4 ./mpi
+	@mpirun -np 4 ./greetings
+	@echo "Test OpenMP..."
+	@./omp
+	@echo "Test Hybrid..."
+	@mpirun -np 4 ./hybrid
 
 clean:
-	$(RM) $(EXES)
+	@rm -f $(BINS)

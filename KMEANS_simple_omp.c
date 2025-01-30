@@ -1,7 +1,7 @@
 /*
  * k-Means clustering algorithm
  *
- * CUDA version
+ * Reference sequential version (Do not modify this code)
  *
  * Parallel computing (Degree in Computer Engineering)
  * 2022/2023
@@ -21,8 +21,7 @@
 #include <time.h>
 #include <string.h>
 #include <float.h>
-#include <cuda.h>
-
+#include <omp.h>
 
 #define MAXLINE 2000
 #define MAXCAD 200
@@ -30,57 +29,6 @@
 //Macros
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
-
-/*
- * Macros to show errors when calling a CUDA library function,
- * or after launching a kernel
- */
-#define CHECK_CUDA_CALL( a )	{ \
-	cudaError_t ok = a; \
-	if ( ok != cudaSuccess ) \
-		fprintf(stderr, "-- Error CUDA call in line %d: %s\n", __LINE__, cudaGetErrorString( ok ) ); \
-	}
-#define CHECK_CUDA_LAST()	{ \
-	cudaError_t ok = cudaGetLastError(); \
-	if ( ok != cudaSuccess ) \
-		fprintf(stderr, "-- Error CUDA last in line %d: %s\n", __LINE__, cudaGetErrorString( ok ) ); \
-	}
-
-// Kernel for first part 
-
-__global__ void k_find_classes(float* point, float* centroid, int* pointClass, int* pointChanges, int lines, int samples, int K){
-
-	int idx = blockDim.x * blockIdx.x + threadIdx.x;
-
-	if (idx < lines){
-		
-		float minDist = FLT_MAX;
-		int currCluster = -1;
-
-		for (int c = 0; c < K; c++){
-			
-			float dist = 0;
-			for (int d = 0; d < samples; d++){
-				float partialDist = point[idx*samples + d] - centroid[c*samples + d];
-				dist += partialDist * partialDist;
-			}
-
-			dist = sqrtf(dist);
-
-			if (dist < minDist){
-				minDist = dist;
-				currCluster = c+1;
-			}
-		}
-		if (pointClass[idx] != currCluster){ 
-			pointClass[idx] = currCluster;
-			pointChanges[idx] = 1;
-		} else {
-			pointChanges[idx] = 0;
-		}
-	}
-}
-
 
 /* 
 Function showFileError: It displays the corresponding error during file reading.
@@ -243,13 +191,6 @@ void zeroFloatMatriz(float *matrix, int rows, int columns)
 			matrix[i*columns+j] = 0.0;	
 }
 
-__device__ void k_zeroFloatMatriz(float *matrix, int rows, int columns){
-	int i,j;
-	for (i=0; i<rows; i++)
-		for (j=0; j<columns; j++)
-			matrix[i*columns+j] = 0.0;		
-}
-
 /*
 Function zeroIntArray: Set array elements to 0
 This function could be modified
@@ -261,19 +202,13 @@ void zeroIntArray(int *array, int size)
 		array[i] = 0;	
 }
 
-__device__ void k_zeroIntArray(int* array, int size){
-	int i;
-	for (i=0; i<size; i++)
-		array[i] = 0;	
-}
-
 
 
 int main(int argc, char* argv[])
 {
 
 	//START CLOCK***************************************
-	double start, end;
+	clock_t start, end;
 	start = clock();
 	//**************************************************
 	/*
@@ -358,20 +293,18 @@ int main(int argc, char* argv[])
 	
 	//END CLOCK*****************************************
 	end = clock();
-	printf("\nMemory allocation: %f seconds\n", end - start);
+	printf("\nMemory allocation: %f seconds\n", (double)(end - start) / CLOCKS_PER_SEC);
 	fflush(stdout);
-
-	CHECK_CUDA_CALL( cudaSetDevice(0) );
-	CHECK_CUDA_CALL( cudaDeviceSynchronize() );
 	//**************************************************
 	//START CLOCK***************************************
 	start = clock();
+	double total_start = omp_get_wtime(); 
 	//**************************************************
 	char *outputMsg = (char *)calloc(10000,sizeof(char));
 	char line[100];
 
 	int j;
-	int classz;
+	int class;
 	float dist, minDist;
 	int it=0;
 	int changes = 0;
@@ -379,7 +312,6 @@ int main(int argc, char* argv[])
 
 	//pointPerClass: number of points classified in each class
 	//auxCentroids: mean of the points in each class
-
 	int *pointsPerClass = (int *)malloc(K*sizeof(int));
 	float *auxCentroids = (float*)malloc(K*samples*sizeof(float));
 	float *distCentroids = (float*)malloc(K*sizeof(float)); 
@@ -395,69 +327,40 @@ int main(int argc, char* argv[])
  *
  */
 
-
-	/* 
-	CUDA MALLOC static data, 
-	so k_data and k_centroids, 
-	*/
-	float* k_data;
-	float* k_centroids;
-	int* k_classMap;
-
-	CHECK_CUDA_CALL(cudaMalloc((void**)&k_data, sizeof(float)*samples*lines));
-	CHECK_CUDA_CALL(cudaMalloc((void**)&k_centroids, sizeof(int)*samples*K));
-	CHECK_CUDA_CALL(cudaMalloc((void**)&k_classMap, sizeof(int)*lines));
-
-
-	CHECK_CUDA_CALL(cudaMemcpy(k_data, data, sizeof(float)*lines*samples, cudaMemcpyHostToDevice));
-	CHECK_CUDA_CALL(cudaMemcpy(k_centroids, centroids, sizeof(float)*K*samples, cudaMemcpyHostToDevice));
-	CHECK_CUDA_CALL(cudaMemcpy(k_classMap, classMap, sizeof(int)*lines, cudaMemcpyHostToDevice));
-	
-	double second_part_clock;
-
+	double pd_start_tot = 0;
+	double rest_tot = 0;
 	do{
+		double pd_st = clock();
 		it++;
 	
 		//1. Calculate the distance from each point to the centroid
 		//Assign each point to the nearest centroid.
-
-		/*
-			SEQUENCIAL PART
-			The goal is to assign a class to each (point)
-
-			Let's try to add some parallel to only the first part (lol)
-
-		*/
-
 		changes = 0;
-		int* k_changes;
 
+		#pragma omp parallel for private(j, dist, minDist, class) reduction(+:changes)
+		for(i=0; i<lines; i++)
+		{
+			class=1;
+			minDist=FLT_MAX;
+			for(j=0; j<K; j++)
+			{
+				dist=euclideanDistance(&data[i*samples], &centroids[j*samples], samples);
 
-		CHECK_CUDA_CALL(cudaMalloc((void**)&k_changes, sizeof(int)*lines));
-
-		int tpb = 256;
-		int bdg = (lines + 255) / tpb;
-
-		k_find_classes<<<dim3(bdg), dim3(tpb)>>>(k_data, k_centroids, k_classMap, k_changes, lines, samples, K);
-		CHECK_CUDA_CALL(cudaDeviceSynchronize());
-		
-		// Get result
-		
-		int* pointChanges = (int*) malloc(sizeof(int)*lines);
-
-		CHECK_CUDA_CALL(cudaMemcpy(pointChanges, k_changes, sizeof(int)*lines, cudaMemcpyDeviceToHost));
-		CHECK_CUDA_CALL(cudaMemcpy(classMap, k_classMap, sizeof(int)*lines, cudaMemcpyDeviceToHost));
-
-		// Cuda free
-		CHECK_CUDA_CALL(cudaFree(k_changes))
-
-		for (int p = 0; p < lines; p++){
-			changes += pointChanges[p];
+				if(dist < minDist)
+				{
+					minDist=dist;
+					class=j+1;
+				}
+			}
+			if(classMap[i]!=class)
+			{
+				changes++;
+			}
+			classMap[i]=class;
 		}
 
-		free(pointChanges);
-
-		double ss = clock();
+		double pd_end = clock();
+		pd_start_tot += (pd_end - pd_st);
 
 		// 2. Recalculates the centroids: calculates the mean within each cluster
 		zeroIntArray(pointsPerClass,K);
@@ -465,10 +368,10 @@ int main(int argc, char* argv[])
 
 		for(i=0; i<lines; i++) 
 		{
-			classz=classMap[i];
-			pointsPerClass[classz-1] = pointsPerClass[classz-1] +1;
+			class=classMap[i];
+			pointsPerClass[class-1] = pointsPerClass[class-1] +1;
 			for(j=0; j<samples; j++){
-				auxCentroids[(classz-1)*samples+j] += data[i*samples+j];
+				auxCentroids[(class-1)*samples+j] += data[i*samples+j];
 			}
 		}
 
@@ -486,13 +389,10 @@ int main(int argc, char* argv[])
 				maxDist=distCentroids[i];
 			}
 		}
-		CHECK_CUDA_CALL(cudaMemcpy(k_centroids, auxCentroids, sizeof(float)*K*samples, cudaMemcpyHostToDevice));
-		CHECK_CUDA_CALL(cudaDeviceSynchronize());
 		memcpy(centroids, auxCentroids, (K*samples*sizeof(float)));
-		double ee = clock();
-		second_part_clock += ee-ss;
 	
-
+		double rest_end = clock();
+		rest_tot += (rest_end-pd_end);
 
 	} while((changes>minChanges) && (it<maxIterations) && (maxDist>maxThreshold));
 
@@ -504,12 +404,13 @@ int main(int argc, char* argv[])
 	// Output and termination conditions
 	printf("%s",outputMsg);	
 
-	CHECK_CUDA_CALL( cudaDeviceSynchronize() );
-
 	//END CLOCK*****************************************
 	end = clock();
+	double total_end = omp_get_wtime();
+	printf("Total execution time: %f seconds\n", total_end - total_start);
 	printf("\nComputation: %f seconds", (double)(end - start) / CLOCKS_PER_SEC);
-	printf("\nSecond Part computation %f seconds ", (double)(second_part_clock)/CLOCKS_PER_SEC);
+	printf("\nFirst part: %f seconds", (pd_start_tot / CLOCKS_PER_SEC));
+	printf("\nSecond part: %f seconds", (rest_tot / CLOCKS_PER_SEC));
 	fflush(stdout);
 	//**************************************************
 	//START CLOCK***************************************
@@ -528,8 +429,6 @@ int main(int argc, char* argv[])
 		printf("\n\nTermination condition:\nCentroid update precision reached: %g [%g]", maxDist, maxThreshold);
 	}	
 
-	printf("Total it %d\n", it);
-
 	// Writing the classification of each point to the output file.
 	error = writeResult(classMap, lines, argv[6]);
 	if(error != 0)
@@ -539,11 +438,6 @@ int main(int argc, char* argv[])
 	}
 
 	//Free memory
-
-	CHECK_CUDA_CALL(cudaFree(k_data));
-	CHECK_CUDA_CALL(cudaFree(k_centroids));
-	CHECK_CUDA_CALL(cudaFree(k_classMap));
-
 	free(data);
 	free(classMap);
 	free(centroidPos);
@@ -554,9 +448,8 @@ int main(int argc, char* argv[])
 
 	//END CLOCK*****************************************
 	end = clock();
-	printf("\nComputation: %f seconds", (double)(end - start) / CLOCKS_PER_SEC);
+	printf("\n\nMemory deallocation: %f seconds\n", (double)(end - start) / CLOCKS_PER_SEC);
 	fflush(stdout);
 	//***************************************************/
 	return 0;
 }
-

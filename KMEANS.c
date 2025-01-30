@@ -424,6 +424,8 @@ int main(int argc, char* argv[])
 		printf("\n\nTermination condition:\nCentroid update precision reached: %g [%g]", maxDist, maxThreshold);
 	}	
 
+	printf("\nTotal iteratios %d\n", it);
+
 	// Writing the classification of each point to the output file.
 	error = writeResult(classMap, lines, argv[6]);
 	if(error != 0)
