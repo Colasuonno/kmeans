@@ -22,6 +22,7 @@
 #include <string.h>
 #include <float.h>
 #include <mpi.h>
+#include <omp.h>
 
 #define MAXLINE 2000
 #define MAXCAD 200
@@ -186,6 +187,7 @@ This function could be modified
 void zeroFloatMatriz(float *matrix, int rows, int columns)
 {
 	int i,j;
+	#pragma omp parallel for collapse(2)
 	for (i=0; i<rows; i++)
 		for (j=0; j<columns; j++)
 			matrix[i*columns+j] = 0.0;	
@@ -198,6 +200,7 @@ This function could be modified
 void zeroIntArray(int *array, int size)
 {
 	int i;
+	#pragma omp parallel for
 	for (i=0; i<size; i++)
 		array[i] = 0;	
 }
@@ -341,8 +344,6 @@ int main(int argc, char* argv[])
 	if (rank == 0){
 		// Only rank 0 computation, easy part....
 
-		printf("Aux ptr %p\n", auxCentroids);
-
 		// FULL CLASSSMAP
 		classMap = (int*)calloc(lines,sizeof(int));
 
@@ -395,7 +396,7 @@ int main(int argc, char* argv[])
 		//1. Calculate the distance from each point to the centroid
 		//Assign each point to the nearest centroid.
 		localChanges = 0;
-
+		#pragma omp parallel for private(j, dist, minDist, class) reduction(+:changes)
 		for(i=0; i<sendcounts[rank]; i++)
 		{
 			class=1;
@@ -465,9 +466,6 @@ int main(int argc, char* argv[])
 
 	
 	// All threads must finish here
-	printf("LC %d\n", changes);
-	printf("LI %d\n", it);
-	printf("MSD %f\n", maxDist);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 /*
@@ -527,7 +525,6 @@ int main(int argc, char* argv[])
 	free(centroidPos);
 	free(centroids);
 
-	
 	
 	
 
