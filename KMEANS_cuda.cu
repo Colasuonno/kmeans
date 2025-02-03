@@ -53,25 +53,25 @@ __global__ void k_find_classes(float* point, float* centroid, int* pointClass, i
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (idx < lines){
-		
 		float minDist = FLT_MAX;
-		int currCluster = -1;
+		int currCluster = 1;
 
 		for (int c = 0; c < K; c++){
 			
-			float dist = 0;
+			float dist = 0.0;
 			for (int d = 0; d < samples; d++){
-				float partialDist = point[idx*samples + d] - centroid[c*samples + d];
-				dist += partialDist * partialDist;
+    			dist += (point[idx*samples + d] - centroid[c*samples + d])*(point[idx*samples + d] - centroid[c*samples + d]);
 			}
-
-			dist = sqrtf(dist);
+			dist = sqrt(dist);
 
 			if (dist < minDist){
 				minDist = dist;
 				currCluster = c+1;
 			}
 		}
+
+		
+		
 		if (pointClass[idx] != currCluster){ 
 			pointClass[idx] = currCluster;
 			pointChanges[idx] = 1;
@@ -405,7 +405,7 @@ int main(int argc, char* argv[])
 	int* k_classMap;
 
 	CHECK_CUDA_CALL(cudaMalloc((void**)&k_data, sizeof(float)*samples*lines));
-	CHECK_CUDA_CALL(cudaMalloc((void**)&k_centroids, sizeof(int)*samples*K));
+	CHECK_CUDA_CALL(cudaMalloc((void**)&k_centroids, sizeof(float)*samples*K));
 	CHECK_CUDA_CALL(cudaMalloc((void**)&k_classMap, sizeof(int)*lines));
 
 
@@ -436,8 +436,8 @@ int main(int argc, char* argv[])
 		CHECK_CUDA_CALL(cudaMalloc((void**)&k_changes, sizeof(int)*lines));
 
 		int tpb = 256;
-		int bdg = (lines + 255) / tpb;
-
+		int bdg = (lines + tpb-1) / tpb;
+		
 		k_find_classes<<<dim3(bdg), dim3(tpb)>>>(k_data, k_centroids, k_classMap, k_changes, lines, samples, K);
 		CHECK_CUDA_CALL(cudaDeviceSynchronize());
 		
@@ -449,11 +449,13 @@ int main(int argc, char* argv[])
 		CHECK_CUDA_CALL(cudaMemcpy(classMap, k_classMap, sizeof(int)*lines, cudaMemcpyDeviceToHost));
 
 		// Cuda free
-		CHECK_CUDA_CALL(cudaFree(k_changes))
+		CHECK_CUDA_CALL(cudaFree(k_changes));
 
+		
 		for (int p = 0; p < lines; p++){
 			changes += pointChanges[p];
 		}
+
 
 		free(pointChanges);
 
@@ -487,12 +489,9 @@ int main(int argc, char* argv[])
 			}
 		}
 		CHECK_CUDA_CALL(cudaMemcpy(k_centroids, auxCentroids, sizeof(float)*K*samples, cudaMemcpyHostToDevice));
-		CHECK_CUDA_CALL(cudaDeviceSynchronize());
 		memcpy(centroids, auxCentroids, (K*samples*sizeof(float)));
 		double ee = clock();
 		second_part_clock += ee-ss;
-	
-
 
 	} while((changes>minChanges) && (it<maxIterations) && (maxDist>maxThreshold));
 
@@ -503,8 +502,6 @@ int main(int argc, char* argv[])
  */
 	// Output and termination conditions
 	printf("%s",outputMsg);	
-
-	CHECK_CUDA_CALL( cudaDeviceSynchronize() );
 
 	//END CLOCK*****************************************
 	end = clock();
@@ -528,7 +525,7 @@ int main(int argc, char* argv[])
 		printf("\n\nTermination condition:\nCentroid update precision reached: %g [%g]", maxDist, maxThreshold);
 	}	
 
-	printf("Total it %d\n", it);
+	printf("\nTotal it %d\n", it);
 
 	// Writing the classification of each point to the output file.
 	error = writeResult(classMap, lines, argv[6]);

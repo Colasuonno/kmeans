@@ -354,7 +354,11 @@ int main(int argc, char* argv[])
 				changes++;
 			}
 			classMap[i]=class;
+
+		
 		}
+
+
 
 		double pd_end = clock();
 		pd_start_tot += (pd_end - pd_st);

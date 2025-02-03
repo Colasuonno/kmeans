@@ -396,21 +396,31 @@ int main(int argc, char* argv[])
 		//1. Calculate the distance from each point to the centroid
 		//Assign each point to the nearest centroid.
 		localChanges = 0;
-		#pragma omp parallel for private(j, dist, minDist, class) reduction(+:changes)
+		#pragma omp parallel for private(j, dist, minDist, class) reduction(+:localChanges)
 		for(i=0; i<sendcounts[rank]; i++)
 		{
 			class=1;
 			minDist=FLT_MAX;
-			for(j=0; j<K; j++)
-			{
-				dist=euclideanDistance(&data[displays[rank]*samples + i*samples], &centroids[j*samples], samples);
+			
+			 // Array privati per ogni thread
+    		float localMinDist[K];
+    		int localBestClass[K];
 
-				if(dist < minDist)
-				{
-					minDist=dist;
-					class=j+1;
-				}
-			}
+    		#pragma omp parallel for private(dist,j)
+    		for (j = 0; j < K; j++) {
+        		dist = euclideanDistance(&data[displays[rank] * samples + i * samples], &centroids[j * samples], samples);
+        		localMinDist[j] = dist;
+        		localBestClass[j] = j + 1;
+    		}
+
+    		// Trova il minimo locale dopo il loop parallelo su j
+    		for (j = 0; j < K; j++) {
+        		if (localMinDist[j] < minDist) {
+            		minDist = localMinDist[j];
+            		class = localBestClass[j];
+        		}
+    		}
+			
 			if(localClassmap[i]!=class)
 			{
 
@@ -475,7 +485,8 @@ int main(int argc, char* argv[])
 
 	// Output and termination conditions
 	if (rank == 0){
-
+	
+	printf("Global iterations %d\n", it);
 	//END CLOCK*****************************************
 	end = MPI_Wtime();
 	printf("\nComputation: %f seconds", end - start);

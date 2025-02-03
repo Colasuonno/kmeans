@@ -53,7 +53,7 @@ KMEANS_mpi: KMEANS_mpi.c
 	$(MPICC) $(FLAGS) $(DEBUG) $< $(LIBS) -o $@
 
 KMEANS_cuda: KMEANS_cuda.cu
-	$(CUDACC) $(DEBUG) $< $(LIBS) -o $@
+	$(CUDACC) -O3 -Xptxas -O3 $(DEBUG) $< $(LIBS) -o $@
 
 
 # Remove the target files
