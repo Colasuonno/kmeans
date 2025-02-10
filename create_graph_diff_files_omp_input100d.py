@@ -21,8 +21,8 @@ for i, core in enumerate(cores):
     plt.plot(clusters, values[i], label=f'{core} Core', marker='o')
 
 plt.xlabel('Numero di Cluster')
-plt.ylabel('Valore')
-plt.title('Tempo di esecuzione')
+plt.ylabel('Tempo di esecuzione (sec)')
+plt.title('Tempo di esecuzione (input100D2)')
 plt.legend(title='Numero di Core')
 plt.grid(True)
 plt.xticks(clusters)

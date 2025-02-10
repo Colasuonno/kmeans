@@ -44,7 +44,7 @@ plt.text(min_x, min_y, f'Min ({min_x}, {min_y:.2f})', fontsize=12, color='black'
 
 
 plt.xlabel('Numero di Cluster')
-plt.ylabel('Valore')
+plt.ylabel('Tempo di esecuzione (sec)')
 plt.title('Speedup (input20D)')
 plt.legend(title='Numero di Core')
 plt.grid(True)
